@@ -1,8 +1,9 @@
 import streamlit as st
+from PIL import Image
 import sqlite3
 from datetime import datetime
 
-# 多语言切换函数
+# 文本多语言翻译
 def t(key):
     lang = st.session_state.get("lang", "zh")
     texts = {
@@ -15,11 +16,14 @@ def t(key):
             "status": "状态",
             "not_started": "未开始",
             "in_progress": "进行中",
-            "completed": "已完成",
-            "abandoned": "废弃",
+            "completed": "✅ 已完成",
+            "abandoned": "🗑 废弃",
             "other": "其他",
             "add": "添加",
             "add_staff": "👤 添加人员",
+            "delete_staff": "➖ 删除人员",
+            "staff_deleted": "👤 人员已删除",
+            "no_staff": "暂无人员",
             "name": "姓名",
             "assign": "🔗 分配项目与人员",
             "upload_progress": "📥 上传项目进度",
@@ -28,8 +32,8 @@ def t(key):
             "notes": "📄 进展说明",
             "followup": "📌 跟进建议",
             "submit": "提交进度",
-            "complete": "✅ 项目完成",
-            "delete": "🗑 删除项目",
+            "complete": "项目完成",
+            "delete": "删除项目",
             "language": "🌐 语言切换",
             "owners": "负责人：",
             "no_owners": "暂无负责人",
@@ -45,11 +49,14 @@ def t(key):
             "status": "Status",
             "not_started": "Not Started",
             "in_progress": "In Progress",
-            "completed": "Completed",
-            "abandoned": "Abandoned",
+            "completed": "✅ Completed",
+            "abandoned": "🗑 Abandoned",
             "other": "Other",
             "add": "Add",
             "add_staff": "👤 Add Staff",
+            "delete_staff": "➖ Delete Staff",
+            "staff_deleted": "👤 Staff Deleted",
+            "no_staff": "No Staff",
             "name": "Name",
             "assign": "🔗 Assign Projects",
             "upload_progress": "📥 Upload Progress",
@@ -58,166 +65,267 @@ def t(key):
             "notes": "📄 Progress Notes",
             "followup": "📌 Follow-up Suggestions",
             "submit": "Submit",
-            "complete": "✅ Complete Project",
-            "delete": "🗑 Delete Project",
+            "complete": "Complete Project",
+            "delete": "Delete Project",
             "language": "🌐 Language",
             "owners": "Owners:",
             "no_owners": "No owners",
             "updates": "📈 Update History",
             "no_updates": "No updates",
+        },
+        "es": {
+            "project_overview": "📁 Visión general del proyecto",
+            "filter_project": "🔍 Seleccionar proyecto",
+            "all_projects": "Todos los proyectos",
+            "add_project": "➕ Agregar proyecto",
+            "project_name": "Nombre del proyecto",
+            "status": "Estado",
+            "not_started": "No iniciado",
+            "in_progress": "En progreso",
+            "completed": "✅ Completado",
+            "abandoned": "🗑 Abandonado",
+            "other": "Otro",
+            "add": "Agregar",
+            "add_staff": "👤 Agregar personal",
+            "delete_staff": "➖ Eliminar personal",
+            "staff_deleted": "👤 Personal eliminado",
+            "no_staff": "Sin personal",
+            "name": "Nombre",
+            "assign": "🔗 Asignar proyectos",
+            "upload_progress": "📥 Cargar progreso",
+            "your_name": "Tu nombre",
+            "your_projects": "Selecciona tu proyecto",
+            "notes": "📄 Notas de progreso",
+            "followup": "📌 Sugerencias de seguimiento",
+            "submit": "Enviar",
+            "complete": "Completar proyecto",
+            "delete": "Eliminar proyecto",
+            "language": "🌐 Idioma",
+            "owners": "Responsables:",
+            "no_owners": "Sin responsables",
+            "updates": "📈 Historial de actualizaciones",
+            "no_updates": "Sin actualizaciones",
+        },
+        "pt": {
+            "project_overview": "📁 Visão geral do projeto",
+            "filter_project": "🔍 Selecionar projeto",
+            "all_projects": "Todos os projetos",
+            "add_project": "➕ Adicionar projeto",
+            "project_name": "Nome do projeto",
+            "status": "Estado",
+            "not_started": "Não iniciado",
+            "in_progress": "Em andamento",
+            "completed": "✅ Concluído",
+            "abandoned": "🗑 Abandonado",
+            "other": "Outro",
+            "add": "Adicionar",
+            "add_staff": "👤 Adicionar pessoal",
+            "delete_staff": "➖ Excluir pessoal",
+            "staff_deleted": "👤 Pessoal excluído",
+            "no_staff": "Sem pessoal",
+            "name": "Nome",
+            "assign": "🔗 Atribuir projetos",
+            "upload_progress": "📥 Carregar progresso",
+            "your_name": "Seu nome",
+            "your_projects": "Selecione seu projeto",
+            "notes": "📄 Notas de progresso",
+            "followup": "📌 Sugestões de acompanhamento",
+            "submit": "Enviar",
+            "complete": "Concluir projeto",
+            "delete": "Excluir projeto",
+            "language": "🌐 Idioma",
+            "owners": "Responsáveis:",
+            "no_owners": "Sem responsáveis",
+            "updates": "📈 Histórico de atualizações",
+            "no_updates": "Sem atualizações",
         }
     }
     return texts[lang].get(key, key)
 
-# 页面配置
-st.set_page_config(page_title="项目管理系统", layout="wide")
-# 语言切换
+# 页面配置与样式
+st.set_page_config(page_title="项目管理系统", layout="wide", initial_sidebar_state="expanded")
+st.markdown(
+    """
+    <style>
+    .stButton>button { border-radius: 8px; padding: 0.5rem 1rem; }
+    [data-testid="stSidebar"] { background-color: #f0f2f6; }
+    .main-header { font-size: 2rem; color: #0a3d62; margin-bottom: 1rem; }
+    </style>
+    """, unsafe_allow_html=True
+)
+
+# Logo 加载（相对路径）
+LOGO_PATH = "suntaq_logo.png"
+logo = Image.open(LOGO_PATH)
+col_logo, col_title = st.columns([1, 5])
+with col_logo:
+    st.image(logo, width=80)
+with col_title:
+    st.markdown(f"<h1 class='main-header'>{t('project_overview')}</h1>", unsafe_allow_html=True)
+
+# 侧边栏：Logo、语言、功能面板
+st.sidebar.image(logo, width=120)
 st.sidebar.selectbox(
-    t("language"), ["中文", "English"],
-    index=0 if st.session_state.get("lang", "zh") == "zh" else 1,
+    t("language"), ["中文", "English", "Español", "Português"],
+    index={"zh":0, "en":1, "es":2, "pt":3}[st.session_state.get("lang","zh")],
     key="lang_selector"
 )
-st.session_state["lang"] = "zh" if st.session_state.lang_selector == "中文" else "en"
+st.session_state["lang"] = {"中文":"zh","English":"en","Español":"es","Português":"pt"}[st.session_state.lang_selector]
 
-# 数据库连接
+# 数据库连接与初始化
 conn = sqlite3.connect("project_manager.db", check_same_thread=False)
 c = conn.cursor()
-# 初始化表
 c.execute("CREATE TABLE IF NOT EXISTS projects (项目名称 TEXT PRIMARY KEY, 状态 TEXT)")
 c.execute("CREATE TABLE IF NOT EXISTS staff (姓名 TEXT PRIMARY KEY)")
 c.execute("CREATE TABLE IF NOT EXISTS assignments (项目名称 TEXT, 姓名 TEXT, PRIMARY KEY (项目名称, 姓名))")
-c.execute("CREATE TABLE IF NOT EXISTS progress_updates (id INTEGER PRIMARY KEY AUTOINCREMENT, 项目名称 TEXT, 姓名 TEXT, 更新时间 TEXT, 进展说明 TEXT, 资源需求 TEXT, 跟进建议 TEXT)")
+c.execute(
+    """
+    CREATE TABLE IF NOT EXISTS progress_updates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        项目名称 TEXT,
+        姓名 TEXT,
+        更新时间 TEXT,
+        进展说明 TEXT,
+        资源需求 TEXT,
+        跟进建议 TEXT
+    )
+    """
+)
 conn.commit()
 
-# ➕ 添加项目
+# 添加项目
 with st.sidebar.expander(t("add_project")):
     with st.form("add_project_form", clear_on_submit=True):
-        project_name = st.text_input(t("project_name"))
-        status = st.selectbox(t("status"), [t("not_started"), t("in_progress")])
-        if st.form_submit_button(t("add")) and project_name:
+        pname = st.text_input(t("project_name"))
+        pstatus = st.selectbox(t("status"), [t("not_started"), t("in_progress")])
+        if st.form_submit_button(t("add")) and pname:
             try:
-                c.execute("INSERT INTO projects (项目名称, 状态) VALUES (?, ?)", (project_name, status))
+                c.execute("INSERT INTO projects VALUES (?, ?)", (pname, pstatus))
                 conn.commit()
-                st.success(f"{project_name} ✔")
+                st.success(f"{pname} ✔")
             except:
-                st.warning("项目已存在")
+                st.warning(f"{pname} 已存在")
 
-# 👤 添加人员
+# 添加人员
 with st.sidebar.expander(t("add_staff")):
     with st.form("add_staff_form", clear_on_submit=True):
-        name = st.text_input(t("name"))
-        if st.form_submit_button(t("add")) and name:
+        sname = st.text_input(t("name"))
+        if st.form_submit_button(t("add")) and sname:
             try:
-                c.execute("INSERT INTO staff VALUES (?)", (name,))
+                c.execute("INSERT INTO staff VALUES (?)", (sname,))
                 conn.commit()
-                st.success(f"{name} ✔")
+                st.success(f"{sname} ✔")
             except:
-                st.warning("人员已存在")
+                st.warning(f"{sname} 已存在")
 
-# 🔗 分配项目与人员
+# 删除人员
+with st.sidebar.expander(t("delete_staff")):
+    with st.form("delete_staff_form", clear_on_submit=True):
+        staff_list = [r[0] for r in c.execute("SELECT 姓名 FROM staff").fetchall()]
+        if staff_list:
+            sel = st.selectbox(t("name"), staff_list)
+            if st.form_submit_button(t("delete_staff")):
+                c.execute("DELETE FROM staff WHERE 姓名=?", (sel,))
+                c.execute("DELETE FROM assignments WHERE 姓名=?", (sel,))
+                c.execute("DELETE FROM progress_updates WHERE 姓名=?", (sel,))
+                conn.commit()
+                st.success(t("staff_deleted"))
+        else:
+            st.info(t("no_staff"))
+
+# 分配项目
 with st.sidebar.expander(t("assign")):
     with st.form("assign_form", clear_on_submit=True):
         projects = [r[0] for r in c.execute("SELECT 项目名称 FROM projects").fetchall()]
-        people = [r[0] for r in c.execute("SELECT 姓名 FROM staff").fetchall()]
-        if projects and people:
+        staff = [r[0] for r in c.execute("SELECT 姓名 FROM staff").fetchall()]
+        if projects and staff:
             proj = st.selectbox(t("project_name"), projects)
-            person = st.selectbox(t("name"), people)
+            per = st.selectbox(t("name"), staff)
             if st.form_submit_button(t("add")):
                 try:
-                    c.execute("INSERT INTO assignments VALUES (?, ?)", (proj, person))
+                    c.execute("INSERT INTO assignments VALUES (?, ?)", (proj, per))
                     conn.commit()
-                    st.success(f"{person} ➜ {proj}")
+                    st.success(f"{per} ➜ {proj}")
                 except:
-                    st.warning("已分配")
+                    st.warning(f"{per} ➜ {proj} 已存在")
         else:
-            st.info("请先添加项目和人员")
+            st.info(t("no_owners"))
 
-# 📥 上传项目进度
+# 上传进度
 st.sidebar.markdown(f"### {t('upload_progress')}")
 all_staff = [r[0] for r in c.execute("SELECT 姓名 FROM staff").fetchall()]
 if all_staff:
-    selected_name = st.sidebar.selectbox(t("your_name"), all_staff)
-    my_projects = [r[0] for r in c.execute("SELECT 项目名称 FROM assignments WHERE 姓名=?", (selected_name,)).fetchall()]
-    if my_projects:
+    sel = st.sidebar.selectbox(t("your_name"), all_staff)
+    my_projs = [r[0] for r in c.execute("SELECT 项目名称 FROM assignments WHERE 姓名=?", (sel,)).fetchall()]
+    if my_projs:
         with st.sidebar.form("progress_form", clear_on_submit=True):
-            proj = st.selectbox(t("your_projects"), my_projects)
+            proj = st.selectbox(t("your_projects"), my_projs)
             notes = st.text_area(t("notes"))
-            followup = st.text_area(t("followup"))
+            follow = st.text_area(t("followup"))
             if st.form_submit_button(t("submit")):
                 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 c.execute(
-                    "INSERT INTO progress_updates (项目名称, 姓名, 更新时间, 进展说明, 资源需求, 跟进建议) VALUES (?, ?, ?, ?, ?, ?)",
-                    (proj, selected_name, now, notes, '', followup)
+                    "INSERT INTO progress_updates VALUES (NULL, ?, ?, ?, ?, ?, ?)",
+                    (proj, sel, now, notes, '', follow)
                 )
                 conn.commit()
-                st.sidebar.success("✅ 已上传")
+                st.sidebar.success(f"✅ {t('submit')} 成功")
     else:
-        st.sidebar.info("你没有被分配任何项目")
+        st.sidebar.info(t("no_owners"))
 else:
-    st.sidebar.warning("暂无人员")
+    st.sidebar.warning(t("no_staff"))
 
-# 📁 主界面展示及分类过滤
+# 主界面展示
 st.subheader(t("project_overview"))
-all_data = c.execute("SELECT 项目名称, 状态 FROM projects").fetchall()
-
-# 状态翻译映射到状态码
-ALL_STATUS_TRANSLATIONS = {
-    "not_started": ["未开始", "Not Started"],
-    "in_progress": ["进行中", "In Progress"],
-    "completed": ["已完成", "Completed"],
-    "abandoned": ["废弃", "Abandoned"]
-}
-status_code_map = {}
-for code, trans_list in ALL_STATUS_TRANSLATIONS.items():
-    for trans in trans_list:
-        status_code_map[trans] = code
-
-# 分类收集
-categories = ["not_started", "in_progress", "completed", "abandoned"]
-cat_map = {code: [] for code in categories}
+rows = c.execute("SELECT 项目名称, 状态 FROM projects ORDER BY 状态 DESC, 项目名称").fetchall()
+# 状态映射
+mapping = {}
+variants = [
+    ("not_started", ["未开始","Not Started","No iniciado","Não iniciado"]),
+    ("in_progress", ["进行中","In Progress","En progreso","Em andamento"]),
+    ("completed", ["✅ 已完成","✅ Completed","✅ Completado","✅ Concluído"]),
+    ("abandoned", ["🗑 废弃","🗑 Abandoned","🗑 Abandonado","🗑 Abandonado"]),
+]
+for code, vs in variants:
+    for v in vs:
+        mapping[v] = code
+cats = [c[0] for c in variants]
+cat_map = {code: [] for code in cats}
 cat_map["other"] = []
-for name, stored_status in all_data:
-    code = status_code_map.get(stored_status, "other")
-    cat_map.setdefault(code, []).append(name)
-
-# 构建下拉选项
-options = []
-headers = []
-for code in categories + ["other"]:
-    header = f"— {t(code)} —"
-    options.append(header)
-    headers.append(header)
-    options.extend(cat_map.get(code, []))
-
-sel = st.selectbox(t("filter_project"), options)
-
-# 选中后数据展示
-if sel in headers:
-    idx = headers.index(sel)
-    codes = categories + ["other"]
-    sel_code = codes[idx]
-    display_data = [(n, t(sel_code)) for n in cat_map.get(sel_code, [])]
+for name, stt in rows:
+    cat = mapping.get(stt, "other")
+    cat_map.setdefault(cat, []).append(name)
+# 构造下拉
+opts, heads = [], []
+for code in cats + ["other"]:
+    hdr = f"— {t(code)} —"
+    opts.append(hdr)
+    heads.append(hdr)
+    opts.extend(cat_map.get(code, []))
+sel = st.selectbox(t("filter_project"), opts)
+# 筛选数据
+if sel in heads:
+    i = heads.index(sel)
+    code = cats + ["other"][i]
+    data = [(n, t(code) if code in cats else code) for n in cat_map.get(code, [])]
 elif sel:
-    # 单项目展示
-    original_status = next((s for n, s in all_data if n == sel), "")
-    code = status_code_map.get(original_status, "other")
-    display_status = t(code) if code in categories else original_status
-    display_data = [(sel, display_status)]
+    orig = next((s for n, s in rows if n==sel), None)
+    code = mapping.get(orig, "other")
+    disp = t(code) if code in cats else orig
+    data = [(sel, disp)]
 else:
-    display_data = []
-
-# 渲染项目及操作按钮
-if not display_data:
-    st.info("暂无项目")
+    data = []
+# 展示
+if not data:
+    st.info(t("no_updates"))
 else:
-    for pname, disp_status in display_data:
+    for pname, pstatus in data:
         st.markdown(f"### 🔹 {pname}")
-        st.text(f"{t('status')}: {disp_status}")
-        owners = [r[0] for r in c.execute("SELECT 姓名 FROM assignments WHERE 项目名称=?", (pname,)).fetchall()]
-        st.markdown(f"**{t('owners')}** " + (", ".join(owners) if owners else f"_{t('no_owners')}_"))
+        st.text(f"{t('status')}: {pstatus}")
+        owner_list = [r[0] for r in c.execute("SELECT 姓名 FROM assignments WHERE 项目名称=?", (pname,)).fetchall()]
+        st.markdown(f"**{t('owners')}** " + ("，".join(owner_list) if owner_list else f"_{t('no_owners')}_"))
         updates = c.execute(
-            "SELECT 姓名, 更新时间, 进展说明, 资源需求, 跟进建议 FROM progress_updates WHERE 项目名称=? ORDER BY 更新时间 DESC",
-            (pname,)
+            "SELECT 姓名, 更新时间, 进展说明, 资源需求, 跟进建议 FROM progress_updates WHERE 项目名称=? ORDER BY 更新时间 DESC", (pname,)
         ).fetchall()
         if updates:
             st.markdown(f"#### {t('updates')}")
@@ -228,18 +336,16 @@ else:
                 st.markdown('---')
         else:
             st.info(t("no_updates"))
-        col1, col2 = st.columns(2)
-        with col1:
-            if disp_status != t("completed") and disp_status != t("abandoned") and st.button(f"{t('complete')}", key=f"done_{pname}"):
+        c1, c2 = st.columns(2)
+        with c1:
+            if pstatus not in [t("completed"), t("abandoned")] and st.button(t("complete"), key=f"done_{pname}"):
                 c.execute("UPDATE projects SET 状态=? WHERE 项目名称=?", (t("completed"), pname))
                 conn.commit()
-                st.success("✅ 项目已完成")
-                if hasattr(st, "experimental_rerun"):
-                    st.experimental_rerun()
-        with col2:
-            if disp_status != t("abandoned") and st.button(f"{t('delete')}", key=f"del_{pname}"):
+                st.success(t("completed"))
+                if hasattr(st, "experimental_rerun"): st.experimental_rerun()
+        with c2:
+            if pstatus != t("abandoned") and st.button(t("delete"), key=f"del_{pname}"):
                 c.execute("UPDATE projects SET 状态=? WHERE 项目名称=?", (t("abandoned"), pname))
                 conn.commit()
-                st.success(f"🗑 项目已标记为{t('abandoned')}")
-                if hasattr(st, "experimental_rerun"):
-                    st.experimental_rerun()
+                st.success(t("abandoned"))
+                if hasattr(st, "experimental_rerun"): st.experimental_rerun()
