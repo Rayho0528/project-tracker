@@ -1,9 +1,9 @@
 import streamlit as st
 from PIL import Image
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
-# 文本多语言翻译
+# 多语言翻译函数
 def t(key):
     lang = st.session_state.get("lang", "zh")
     texts = {
@@ -152,10 +152,10 @@ st.markdown(
     .main-header { font-size: 2rem; color: #0a3d62; margin-bottom: 1rem; }
     </style>
     """,
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
 )
 
-# 加载 Logo（相对路径）
+# Logo 加载（相对路径）：suntaq_logo.png 放在项目根目录
 LOGO_PATH = "suntaq_logo.png"
 logo = Image.open(LOGO_PATH)
 col_logo, col_title = st.columns([1, 5])
@@ -164,7 +164,7 @@ with col_logo:
 with col_title:
     st.markdown(f"<h1 class='main-header'>{t('project_overview')}</h1>", unsafe_allow_html=True)
 
-# 侧边栏功能
+# 侧边栏：Logo、语言切换及功能面板展开器
 st.sidebar.image(logo, width=120)
 st.sidebar.selectbox(
     t("language"), ["中文", "English", "Español", "Português"],
@@ -172,7 +172,7 @@ st.sidebar.selectbox(
 )
 st.session_state["lang"] = {"中文":"zh","English":"en","Español":"es","Português":"pt"}[st.session_state.lang_selector]
 
-# 数据库连接与初始化
+# 数据库连接和表初始化
 conn = sqlite3.connect("project_manager.db", check_same_thread=False)
 c = conn.cursor()
 c.execute("CREATE TABLE IF NOT EXISTS projects (项目名称 TEXT PRIMARY KEY, 状态 TEXT)")
@@ -203,7 +203,7 @@ with st.sidebar.expander(t("add_project")):
                 c.execute("INSERT INTO projects (项目名称, 状态) VALUES (?, ?)", (pname, pstatus))
                 conn.commit()
                 st.success(f"{pname} ✔")
-            except:
+            except sqlite3.IntegrityError:
                 st.warning(f"{pname} 已存在")
 
 # 👤 添加人员
@@ -212,10 +212,10 @@ with st.sidebar.expander(t("add_staff")):
         sname = st.text_input(t("name"))
         if st.form_submit_button(t("add")) and sname:
             try:
-                c.execute("INSERT INTO staff VALUES (?)", (sname,))
+                c.execute("INSERT INTO staff (姓名) VALUES (?)", (sname,))
                 conn.commit()
                 st.success(f"{sname} ✔")
-            except:
+            except sqlite3.IntegrityError:
                 st.warning(f"{sname} 已存在")
 
 # ➖ 删除人员
@@ -237,16 +237,16 @@ with st.sidebar.expander(t("delete_staff")):
 with st.sidebar.expander(t("assign")):
     with st.form("assign_form", clear_on_submit=True):
         projs = [r[0] for r in c.execute("SELECT 项目名称 FROM projects").fetchall()]
-        people = [r[0] for r in c.execute("SELECT 姓名 FROM staff").fetchall()]
-        if projs and people:
+        staff = [r[0] for r in c.execute("SELECT 姓名 FROM staff").fetchall()]
+        if projs and staff:
             proj = st.selectbox(t("project_name"), projs)
-            per = st.selectbox(t("name"), people)
+            per = st.selectbox(t("name"), staff)
             if st.form_submit_button(t("add")):
                 try:
-                    c.execute("INSERT INTO assignments VALUES (?, ?)", (proj, per))
+                    c.execute("INSERT INTO assignments (项目名称, 姓名) VALUES (?, ?)", (proj, per))
                     conn.commit()
                     st.success(f"{per} ➜ {proj}")
-                except:
+                except sqlite3.IntegrityError:
                     st.warning(f"{per} ➜ {proj} 已存在")
         else:
             st.info(t("no_owners"))
@@ -263,9 +263,10 @@ if staffs:
             notes = st.text_area(t("notes"))
             follow = st.text_area(t("followup"))
             if st.form_submit_button(t("submit")):
-                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                # 使用北京时间 (UTC+8)
+                now = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
                 c.execute(
-                    "INSERT INTO progress_updates VALUES (NULL, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO progress_updates (项目名称, 姓名, 更新时间, 进展说明, 资源需求, 跟进建议) VALUES (?, ?, ?, ?, ?, ?)",
                     (proj, sel, now, notes, '', follow)
                 )
                 conn.commit()
@@ -278,6 +279,7 @@ else:
 # 📁 主界面展示及分类过滤
 st.subheader(t("project_overview"))
 rows = c.execute("SELECT 项目名称, 状态 FROM projects ORDER BY 状态 DESC, 项目名称").fetchall()
+# 状态映射表
 ALL_STATUS_TRANSLATIONS = {
     "not_started": ["未开始","Not Started","No iniciado","Não iniciado"],
     "in_progress": ["进行中","In Progress","En progreso","Em andamento"],
@@ -291,6 +293,7 @@ cat_map["other"] = []
 for n, stt in rows:
     key = status_map.get(stt, "other")
     cat_map.setdefault(key, []).append(n)
+# 下拉选项
 opts, heads = [], []
 for code in cats + ["other"]:
     hdr = f"— {t(code)} —"
@@ -298,6 +301,8 @@ for code in cats + ["other"]:
     heads.append(hdr)
     opts.extend(cat_map.get(code, []))
 sel = st.selectbox(t("filter_project"), opts)
+# 筛选展示数据
+data = []
 if sel in heads:
     idx = heads.index(sel)
     chosen = (cats + ["other"])[idx]
@@ -307,9 +312,8 @@ elif sel:
     code = status_map.get(orig, "other")
     disp = t(code) if code in cats else orig
     data = [(sel, disp)]
-else:
-    data = []
 
+# 渲染与操作按钮
 if not data:
     st.info(t("no_updates"))
 else:
