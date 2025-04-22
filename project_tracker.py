@@ -148,13 +148,14 @@ st.markdown(
     """
     <style>
     .stButton>button { border-radius: 8px; padding: 0.5rem 1rem; }
-    [data-testid="stSidebar"] { background-color: #f0f2f6; }
+    [data-testid=\"stSidebar\"] { background-color: #f0f2f6; }
     .main-header { font-size: 2rem; color: #0a3d62; margin-bottom: 1rem; }
     </style>
-    """, unsafe_allow_html=True
+    """,
+    unsafe_allow_html=True,
 )
 
-# Logo 加载（相对路径）
+# 加载 Logo（相对路径）
 LOGO_PATH = "suntaq_logo.png"
 logo = Image.open(LOGO_PATH)
 col_logo, col_title = st.columns([1, 5])
@@ -163,12 +164,11 @@ with col_logo:
 with col_title:
     st.markdown(f"<h1 class='main-header'>{t('project_overview')}</h1>", unsafe_allow_html=True)
 
-# 侧边栏：Logo、语言、功能面板
+# 侧边栏功能
 st.sidebar.image(logo, width=120)
 st.sidebar.selectbox(
     t("language"), ["中文", "English", "Español", "Português"],
-    index={"zh":0, "en":1, "es":2, "pt":3}[st.session_state.get("lang","zh")],
-    key="lang_selector"
+    index={"zh":0, "en":1, "es":2, "pt":3}[st.session_state.get("lang","zh")], key="lang_selector"
 )
 st.session_state["lang"] = {"中文":"zh","English":"en","Español":"es","Português":"pt"}[st.session_state.lang_selector]
 
@@ -193,20 +193,20 @@ c.execute(
 )
 conn.commit()
 
-# 添加项目
+# ➕ 添加项目
 with st.sidebar.expander(t("add_project")):
     with st.form("add_project_form", clear_on_submit=True):
         pname = st.text_input(t("project_name"))
         pstatus = st.selectbox(t("status"), [t("not_started"), t("in_progress")])
         if st.form_submit_button(t("add")) and pname:
             try:
-                c.execute("INSERT INTO projects VALUES (?, ?)", (pname, pstatus))
+                c.execute("INSERT INTO projects (项目名称, 状态) VALUES (?, ?)", (pname, pstatus))
                 conn.commit()
                 st.success(f"{pname} ✔")
             except:
                 st.warning(f"{pname} 已存在")
 
-# 添加人员
+# 👤 添加人员
 with st.sidebar.expander(t("add_staff")):
     with st.form("add_staff_form", clear_on_submit=True):
         sname = st.text_input(t("name"))
@@ -218,7 +218,7 @@ with st.sidebar.expander(t("add_staff")):
             except:
                 st.warning(f"{sname} 已存在")
 
-# 删除人员
+# ➖ 删除人员
 with st.sidebar.expander(t("delete_staff")):
     with st.form("delete_staff_form", clear_on_submit=True):
         staff_list = [r[0] for r in c.execute("SELECT 姓名 FROM staff").fetchall()]
@@ -233,14 +233,14 @@ with st.sidebar.expander(t("delete_staff")):
         else:
             st.info(t("no_staff"))
 
-# 分配项目
+# 🔗 分配项目与人员
 with st.sidebar.expander(t("assign")):
     with st.form("assign_form", clear_on_submit=True):
-        projects = [r[0] for r in c.execute("SELECT 项目名称 FROM projects").fetchall()]
-        staff = [r[0] for r in c.execute("SELECT 姓名 FROM staff").fetchall()]
-        if projects and staff:
-            proj = st.selectbox(t("project_name"), projects)
-            per = st.selectbox(t("name"), staff)
+        projs = [r[0] for r in c.execute("SELECT 项目名称 FROM projects").fetchall()]
+        people = [r[0] for r in c.execute("SELECT 姓名 FROM staff").fetchall()]
+        if projs and people:
+            proj = st.selectbox(t("project_name"), projs)
+            per = st.selectbox(t("name"), people)
             if st.form_submit_button(t("add")):
                 try:
                     c.execute("INSERT INTO assignments VALUES (?, ?)", (proj, per))
@@ -251,15 +251,15 @@ with st.sidebar.expander(t("assign")):
         else:
             st.info(t("no_owners"))
 
-# 上传进度
+# 📥 上传项目进度
 st.sidebar.markdown(f"### {t('upload_progress')}")
-all_staff = [r[0] for r in c.execute("SELECT 姓名 FROM staff").fetchall()]
-if all_staff:
-    sel = st.sidebar.selectbox(t("your_name"), all_staff)
-    my_projs = [r[0] for r in c.execute("SELECT 项目名称 FROM assignments WHERE 姓名=?", (sel,)).fetchall()]
-    if my_projs:
+staffs = [r[0] for r in c.execute("SELECT 姓名 FROM staff").fetchall()]
+if staffs:
+    sel = st.sidebar.selectbox(t("your_name"), staffs)
+    my_prjs = [r[0] for r in c.execute("SELECT 项目名称 FROM assignments WHERE 姓名=?", (sel,)).fetchall()]
+    if my_prjs:
         with st.sidebar.form("progress_form", clear_on_submit=True):
-            proj = st.selectbox(t("your_projects"), my_projs)
+            proj = st.selectbox(t("your_projects"), my_prjs)
             notes = st.text_area(t("notes"))
             follow = st.text_area(t("followup"))
             if st.form_submit_button(t("submit")):
@@ -275,27 +275,22 @@ if all_staff:
 else:
     st.sidebar.warning(t("no_staff"))
 
-# 主界面展示
+# 📁 主界面展示及分类过滤
 st.subheader(t("project_overview"))
 rows = c.execute("SELECT 项目名称, 状态 FROM projects ORDER BY 状态 DESC, 项目名称").fetchall()
-# 状态映射
-mapping = {}
-variants = [
-    ("not_started", ["未开始","Not Started","No iniciado","Não iniciado"]),
-    ("in_progress", ["进行中","In Progress","En progreso","Em andamento"]),
-    ("completed", ["✅ 已完成","✅ Completed","✅ Completado","✅ Concluído"]),
-    ("abandoned", ["🗑 废弃","🗑 Abandoned","🗑 Abandonado","🗑 Abandonado"]),
-]
-for code, vs in variants:
-    for v in vs:
-        mapping[v] = code
-cats = [c[0] for c in variants]
-cat_map = {code: [] for code in cats}
+ALL_STATUS_TRANSLATIONS = {
+    "not_started": ["未开始","Not Started","No iniciado","Não iniciado"],
+    "in_progress": ["进行中","In Progress","En progreso","Em andamento"],
+    "completed": ["✅ 已完成","✅ Completed","✅ Completado","✅ Concluído"],
+    "abandoned": ["🗑 废弃","🗑 Abandoned","🗑 Abandonado","🗑 Abandonado"],
+}
+status_map = {v: code for code, vs in ALL_STATUS_TRANSLATIONS.items() for v in vs}
+cats = list(ALL_STATUS_TRANSLATIONS.keys())
+cat_map = {c: [] for c in cats}
 cat_map["other"] = []
-for name, stt in rows:
-    cat = mapping.get(stt, "other")
-    cat_map.setdefault(cat, []).append(name)
-# 构造下拉
+for n, stt in rows:
+    key = status_map.get(stt, "other")
+    cat_map.setdefault(key, []).append(n)
 opts, heads = [], []
 for code in cats + ["other"]:
     hdr = f"— {t(code)} —"
@@ -303,36 +298,33 @@ for code in cats + ["other"]:
     heads.append(hdr)
     opts.extend(cat_map.get(code, []))
 sel = st.selectbox(t("filter_project"), opts)
-# 筛选数据
 if sel in heads:
-    i = heads.index(sel)
-    code = cats + ["other"][i]
-    data = [(n, t(code) if code in cats else code) for n in cat_map.get(code, [])]
+    idx = heads.index(sel)
+    chosen = (cats + ["other"])[idx]
+    data = [(n, t(chosen) if chosen in cats else chosen) for n in cat_map.get(chosen, [])]
 elif sel:
-    orig = next((s for n, s in rows if n==sel), None)
-    code = mapping.get(orig, "other")
+    orig = next((s for n, s in rows if n == sel), None)
+    code = status_map.get(orig, "other")
     disp = t(code) if code in cats else orig
     data = [(sel, disp)]
 else:
     data = []
-# 展示
+
 if not data:
     st.info(t("no_updates"))
 else:
     for pname, pstatus in data:
         st.markdown(f"### 🔹 {pname}")
         st.text(f"{t('status')}: {pstatus}")
-        owner_list = [r[0] for r in c.execute("SELECT 姓名 FROM assignments WHERE 项目名称=?", (pname,)).fetchall()]
-        st.markdown(f"**{t('owners')}** " + ("，".join(owner_list) if owner_list else f"_{t('no_owners')}_"))
-        updates = c.execute(
-            "SELECT 姓名, 更新时间, 进展说明, 资源需求, 跟进建议 FROM progress_updates WHERE 项目名称=? ORDER BY 更新时间 DESC", (pname,)
-        ).fetchall()
-        if updates:
+        owners = [r[0] for r in c.execute("SELECT 姓名 FROM assignments WHERE 项目名称=?", (pname,)).fetchall()]
+        st.markdown(f"**{t('owners')}** " + ("，".join(owners) if owners else f"_{t('no_owners')}_"))
+        ups = c.execute("SELECT 姓名, 更新时间, 进展说明, 资源需求, 跟进建议 FROM progress_updates WHERE 项目名称=? ORDER BY 更新时间 DESC", (pname,)).fetchall()
+        if ups:
             st.markdown(f"#### {t('updates')}")
-            for row in updates:
-                st.write(f"🕓 {row[1]} | 👤 {row[0]}")
-                st.markdown(f"- {t('notes')}: {row[2] or '—'}")
-                st.markdown(f"- {t('followup')}: {row[4] or '—'}")
+            for r in ups:
+                st.write(f"🕓 {r[1]} | 👤 {r[0]}")
+                st.markdown(f"- {t('notes')}: {r[2] or '—'}")
+                st.markdown(f"- {t('followup')}: {r[4] or '—'}")
                 st.markdown('---')
         else:
             st.info(t("no_updates"))
